@@ -1,0 +1,56 @@
+{% extends 'store/base.html' %}
+
+{% block title %}{{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    {% if product.image %}
+        <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}">
+    {% endif %}
+    <div class="card-body">
+        <h2 class="card-title">{{ product.name }}</h2>
+        <p class="card-text">{{ product.description }}</p>
+        <p class="fw-bold">Цена: {{ product.price }} ₽</p>
+        <p>Остаток на складе: {{ product.stock }}</p>
+
+        <!-- Средний рейтинг -->
+        {% if reviews.count %}
+            <p>
+                Рейтинг: 
+                {% for i in "12345" %}
+                    {% if forloop.counter <= avg_rating|floatformat:0 %}
+                        <span class="text-warning">&#9733;</span>
+                    {% else %}
+                        <span class="text-secondary">&#9733;</span>
+                    {% endif %}
+                {% endfor %}
+                ({{ avg_rating|floatformat:1 }}/5, {{ reviews.count }} отзывов)
+            </p>
+        {% else %}
+            <p>Рейтинг: Нет отзывов</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Список отзывов -->
+<h4>Отзывы</h4>
+{% if reviews.count %}
+    <ul class="list-group mb-3">
+        {% for review in reviews %}
+            <li class="list-group-item">
+                <strong>{{ review.user.username }}</strong> — Рейтинг: {{ review.rating }}/5
+                <p>{{ review.comment }}</p>
+                <small>{{ review.created_at|date:"d.m.Y H:i" }}</small>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>Нет отзывов.</p>
+{% endif %}
+
+{% if user.is_authenticated %}
+    <a href="{% url 'store:add_review' product.id %}" class="btn btn-primary">Оставить отзыв</a>
+{% else %}
+    <p><a href="{% url 'store:login' %}">Войдите</a>, чтобы оставить отзыв.</p>
+{% endif %}
+{% endblock %}

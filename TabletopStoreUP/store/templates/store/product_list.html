@@ -1,0 +1,72 @@
+{% extends 'store/base.html' %}
+
+{% block title %}Каталог{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Каталог игр</h2>
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    {% for product in products %}
+    <div class="col">
+        <div class="card h-100">
+            {% if product.image %}
+            <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}">
+            {% endif %}
+            <div class="card-body">
+                <h5 class="card-title"><a href="{% url 'store:product_detail' product.pk %}">{{ product.name }}</a></h5>
+                <p class="card-text">{{ product.description|truncatechars:100 }}</p>
+                <p class="card-text fw-bold">{{ product.price }} ₽</p>
+
+                <!-- Рейтинг -->
+                {% if product.review_count %}
+                    <p>Рейтинг:
+                    {% for i in "12345" %}
+                        {% if forloop.counter <= product.avg_rating|floatformat:0 %}
+                            <span class="text-warning">&#9733;</span>
+                        {% else %}
+                            <span class="text-secondary">&#9733;</span>
+                        {% endif %}
+                    {% endfor %}
+                    ({{ product.avg_rating|floatformat:1 }}/5, {{ product.review_count }} отзывов)
+                    </p>
+                {% else %}
+                    <p>Рейтинг: Нет отзывов</p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'store:cart_add' product.id %}" class="btn btn-primary w-100">В корзину</a>
+                {% else %}
+                    <button class="btn btn-secondary w-100" disabled>Войдите, чтобы добавить</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+        <p>Товары отсутствуют.</p>
+    {% endfor %}
+</div>
+
+{% if is_paginated %}
+<nav aria-label="Страницы">
+  <ul class="pagination justify-content-center mt-4">
+    {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Назад</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Назад</span></li>
+    {% endif %}
+
+    <li class="page-item disabled"><span class="page-link">Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span></li>
+
+    {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Вперед</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Вперед</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}
