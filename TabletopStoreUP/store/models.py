@@ -157,3 +157,18 @@ class Review(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.product.name} ({self.rating})"
+    
+class UserSettings(models.Model):
+    THEME_CHOICES = [
+        ('light', 'Светлая'),
+        ('dark', 'Тёмная'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='settings')
+    theme = models.CharField(max_length=10, choices=THEME_CHOICES, default='light')
+    date_format = models.CharField(max_length=20, default='dd.MM.yyyy')
+    number_format = models.CharField(max_length=10, default='1 000,00')
+    page_size = models.PositiveIntegerField(default=10)
+
+    def __str__(self):
+        return f"Настройки {self.user.username}"

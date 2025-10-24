@@ -56,4 +56,5 @@ path('password_reset/',
 
     path('orders/', views.order_list, name='order_list'),
     path('orders/<int:order_id>/', views.order_detail, name='order_detail'),
+    path('api/user/toggle-theme/', views.toggle_theme, name='toggle_theme'),
 ]

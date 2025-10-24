@@ -1,10 +1,13 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg, Sum, Count
-from django.http import HttpResponse
+from django.db.models import Avg, Sum, Count, Q, Subquery, OuterRef, FloatField, Value
+from django.db.models.functions import Coalesce
+from django.http import JsonResponse
+from django.utils.http import urlencode
 from django.contrib import messages
 from django.db import transaction
+from django.views.decorators.http import require_POST
 from django.views.generic import ListView, DetailView
 
 from rest_framework import viewsets, status, generics, permissions
@@ -14,7 +17,7 @@ from rest_framework.decorators import action
 from .models import (
     UserRole, OrderStatus, PaymentStatus, DeliveryMethod, DeliveryStatus,
     Genre, PlayerRange, Product, Order, OrderItem, Payment, Delivery,
-    UserProfile, Cart, CartItem, Review
+    UserProfile, Cart, CartItem, Review, UserSettings
 )
 from .serializers import (
     UserRoleSerializer, OrderStatusSerializer, PaymentStatusSerializer,
@@ -181,15 +184,115 @@ class ProductListView(ListView):
     context_object_name = 'products'
     paginate_by = 12
 
+    def get_queryset(self):
+        # Подсчёт популярности
+        base = (Product.objects
+                .select_related('genre')
+                .prefetch_related('player_ranges')
+                .annotate(orderitems_count=Count('orderitem', distinct=True))
+                )
+
+        avg_subq = (Review.objects
+                    .filter(product_id=OuterRef('pk'))
+                    .values('product_id')
+                    .annotate(a=Count('id') * 0.0)
+                    )
+
+        from django.db.models import Avg
+        avg_subq = (Review.objects
+                    .filter(product_id=OuterRef('pk'))
+                    .values('product_id')
+                    .annotate(a=Avg('rating'))
+                    .values('a')[:1])
+
+        qs = base.annotate(
+            avg_rating=Coalesce(
+                Subquery(avg_subq, output_field=FloatField()),
+                Value(0.0)
+            )
+        )
+
+        params = self.request.GET
+
+        # --- Поиск ---
+        q = (params.get('q') or '').strip()
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+
+        # --- Фильтры ---
+        genre_id = params.get('genre')
+        if genre_id:
+            qs = qs.filter(genre_id=genre_id)
+
+        in_stock = params.get('in_stock')
+        if in_stock == '1':
+            qs = qs.filter(stock__gt=0)
+
+        price_min = params.get('price_min')
+        if price_min:
+            qs = qs.filter(price__gte=price_min)
+
+        price_max = params.get('price_max')
+        if price_max:
+            qs = qs.filter(price__lte=price_max)
+
+        rating_min = params.get('rating_min')
+        if rating_min:
+            qs = qs.filter(avg_rating__gte=rating_min)
+
+        players = params.getlist('players')
+        if players:
+            qs = qs.filter(player_ranges__in=players).distinct()
+
+        # --- Сортировка ---
+        sort = params.get('sort') or 'new'
+        sort_map = {
+            'price_asc': 'price',
+            'price_desc': '-price',
+            'rating_desc': '-avg_rating',
+            'rating_asc': 'avg_rating',
+            'popular': '-orderitems_count',
+            'new': '-id',
+        }
+        qs = qs.order_by(sort_map.get(sort, '-id'))
+
+        return qs
+
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        products = context['products']
-        # Подсчёт среднего рейтинга для каждой игры
-        for product in products:
-            avg = product.reviews.aggregate(average=Avg('rating'))['average'] or 0
-            product.avg_rating = avg
-            product.review_count = product.reviews.count()
-        return context
+        ctx = super().get_context_data(**kwargs)
+        params = self.request.GET.copy()
+
+        def _page_url(page):
+            params2 = params.copy()
+            params2['page'] = page
+            return f"{self.request.path}?{urlencode(params2)}"
+
+        page_obj = ctx.get('page_obj')
+        ctx['next_page_url'] = _page_url(page_obj.next_page_number()) if page_obj and page_obj.has_next() else ''
+        ctx['prev_page_url'] = _page_url(page_obj.previous_page_number()) if page_obj and page_obj.has_previous() else ''
+
+        ctx['genres'] = Genre.objects.all().order_by('name')
+        ctx['player_ranges'] = PlayerRange.objects.all().order_by('min_players', 'max_players')
+
+        ctx['current'] = {
+            'q': self.request.GET.get('q', ''),
+            'genre': self.request.GET.get('genre', ''),
+            'in_stock': self.request.GET.get('in_stock', ''),
+            'price_min': self.request.GET.get('price_min', ''),
+            'price_max': self.request.GET.get('price_max', ''),
+            'rating_min': self.request.GET.get('rating_min', ''),
+            'players': self.request.GET.getlist('players'),
+            'sort': self.request.GET.get('sort', 'new'),
+        }
+
+        ctx['has_active_filters'] = any([
+            ctx['current']['genre'], ctx['current']['in_stock'],
+            ctx['current']['price_min'], ctx['current']['price_max'],
+            ctx['current']['rating_min'], ctx['current']['players']
+        ])
+
+        ctx['reset_url'] = self.request.path
+        return ctx
 
 
 class ProductDetailView(DetailView):
@@ -369,14 +472,13 @@ def order_detail(request, order_id):
     """
     order = get_object_or_404(Order, id=order_id)
 
-    # Проверка доступа: обычный пользователь видит только свои заказы
     if not request.user.is_staff and order.user != request.user:
         messages.error(request, "У вас нет доступа к этому заказу.")
         return redirect('store:order_list')
 
     items = order.items.select_related('product')
     for item in items:
-        item.total_price = item.price * item.quantity  # добавляем атрибут total_price
+        item.total_price = item.price * item.quantity
 
     delivery = getattr(order, 'delivery', None)
     payment = getattr(order, 'payment', None)
@@ -393,7 +495,6 @@ def order_detail(request, order_id):
 def add_review(request, product_id):
     product = get_object_or_404(Product, id=product_id)
 
-    # Проверка: пользователь уже оставил отзыв
     if Review.objects.filter(product=product, user=request.user).exists():
         messages.error(request, "Вы уже оставили отзыв для этого товара.")
         return redirect('store:product_detail', pk=product.id)
@@ -466,3 +567,13 @@ def analytics_dashboard(request):
         'end_date': end_date,
     }
     return render(request, 'store/analytics.html', context)
+
+@login_required
+@require_POST
+def toggle_theme(request):
+    """Переключает тему пользователя и сохраняет на сервере"""
+    with transaction.atomic():
+        settings, _ = UserSettings.objects.get_or_create(user=request.user)
+        settings.theme = 'dark' if settings.theme != 'dark' else 'light'
+        settings.save(update_fields=['theme'])
+    return JsonResponse({'status': 'ok', 'theme': settings.theme})

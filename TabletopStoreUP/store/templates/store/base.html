@@ -1,12 +1,27 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Магазин настольных игр{% endblock %}</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
 </head>
-<body>
+<body
+  data-role="{% if user.is_superuser %}admin{% elif user.is_staff %}manager{% elif user.is_authenticated %}client{% else %}guest{% endif %}"
+  data-url-home="{% url 'store:product_list' %}"
+  data-url-catalog="{% url 'store:product_list' %}"
+  data-url-cart="{% url 'store:cart_detail' %}"
+  data-url-checkout="{% url 'store:cart_detail' %}#checkout"
+
+  data-url-next="{{ next_page_url|default:'' }}"
+  data-url-prev="{{ prev_page_url|default:'' }}"
+  data-url-admin-orders="{% url 'admin:index' %}"
+  data-url-toggle-theme="{% url 'store:toggle_theme' %}"
+  class="{% if request.user.is_authenticated and request.user.settings.theme == 'dark' %}theme-dark{% else %}theme-light{% endif %}"
+>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container">
     <a class="navbar-brand" href="{% url 'store:product_list' %}">Магазин настольных игр</a>
@@ -15,18 +30,11 @@
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav ms-auto">
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'store:cart_detail' %}">Корзина</a>
-        </li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'store:cart_detail' %}">Корзина</a></li>
         {% if user.is_authenticated %}
-          <li class="nav-item">
-            <span class="nav-link">Привет, {{ user.username }}</span>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'store:order_list' %}">Мои заказы</a>
-          </li>
+          <li class="nav-item"><span class="nav-link">Привет, {{ user.username }}</span></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'store:order_list' %}">Мои заказы</a></li>
           {% if user.is_staff %}
-          <!-- Ссылки для менеджеров и админов -->
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
               Управление
@@ -38,16 +46,10 @@
             </ul>
           </li>
           {% endif %}
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'store:logout' %}">Выйти</a>
-          </li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'store:logout' %}">Выйти</a></li>
         {% else %}
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'store:login' %}">Войти</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'store:register' %}">Регистрация</a>
-          </li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'store:login' %}">Войти</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'store:register' %}">Регистрация</a></li>
         {% endif %}
       </ul>
     </div>
@@ -71,6 +73,10 @@
     © 2025 Магазин настольных игр
 </footer>
 
+{% include 'partials/hotkeys_modal.html' %}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script src="{% static 'js/hotkeys.js' %}"></script>
 </body>
 </html>
