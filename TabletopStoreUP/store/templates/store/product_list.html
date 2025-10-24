@@ -20,6 +20,23 @@
     Фильтры
   </button>
 
+  <form method="post" action="{% url 'store:update_page_size' %}" class="ms-2">
+    {% csrf_token %}
+    <select name="page_size" class="form-select form-select-sm" onchange="this.form.submit()">
+      {% for n in page_sizes %}
+        <option value="{{ n }}"
+          {% if request.user.is_authenticated and request.user.settings.page_size == n %}
+            selected
+          {% endif %}
+        >{{ n }} на страницу</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  <a href="{{ save_filters_url }}?{{ request.GET.urlencode }}" class="btn btn-outline-secondary">Сохранить фильтры</a>
+  <a href="{{ apply_filters_url }}" class="btn btn-outline-secondary">Применить сохранённые</a>
+
+
   <form method="get" class="ms-auto">
     {# сортировка #}
     {% for k,v in request.GET.items %}

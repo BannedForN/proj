@@ -57,4 +57,14 @@ path('password_reset/',
     path('orders/', views.order_list, name='order_list'),
     path('orders/<int:order_id>/', views.order_detail, name='order_detail'),
     path('api/user/toggle-theme/', views.toggle_theme, name='toggle_theme'),
+    path('payments/mock/<int:payment_id>/', views.payment_mock, name='payment_mock'),
+    path('payments/mock/<int:payment_id>/callback/', views.payment_mock_callback, name='payment_mock_callback'),
+    path('orders/success/<int:order_id>/', views.order_success_view, name='order_success'),
+
+    path('settings/page-size/', views.update_page_size, name='update_page_size'),
+    path('catalog/filters/save/', views.save_catalog_filters, name='save_catalog_filters'),
+    path('catalog/filters/apply/', views.apply_catalog_filters, name='apply_catalog_filters'),
+    path('settings/', views.user_settings_view, name='user_settings'),
+    
+    path('admin/backups/<str:filename>/', views.download_backup, name='download_backup'),
 ]

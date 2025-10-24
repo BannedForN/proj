@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User as DjangoUser
 from django.contrib.auth import get_user_model
-from django.db.models import Avg
+from django.db.models import Avg, JSONField
 from django.conf import settings
 
 User = get_user_model()
@@ -104,16 +104,23 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
 
+class PaymentMethod(models.Model):
+    code = models.CharField(max_length=32, unique=True)
+    name = models.CharField(max_length=64)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
 
 class Payment(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_date = models.DateTimeField(auto_now_add=True)
     status = models.ForeignKey(PaymentStatus, on_delete=models.PROTECT)
+    method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT)
 
     def __str__(self):
         return f"Payment for Order {self.order.id}"
-
 
 class Delivery(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE)
@@ -172,3 +179,17 @@ class UserSettings(models.Model):
 
     def __str__(self):
         return f"Настройки {self.user.username}"
+    
+class UserSettings(models.Model):
+    THEME_CHOICES = [('light','Light'), ('dark','Dark')]
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='settings')
+    theme = models.CharField(max_length=10, choices=THEME_CHOICES, default='light')
+    date_format = models.CharField(max_length=20, default='d.m.Y')
+    number_format = models.CharField(max_length=20, default='1 234,56')
+    page_size = models.PositiveIntegerField(default=12)
+    saved_filters = JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Настройки {self.user}'

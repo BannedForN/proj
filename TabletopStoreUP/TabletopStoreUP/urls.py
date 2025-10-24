@@ -4,6 +4,7 @@ from django.conf.urls.static import static
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from store.views import UserRoleViewSet, OrderStatusViewSet, PaymentStatusViewSet, DeliveryMethodViewSet, DeliveryStatusViewSet, GenreViewSet, PlayerRangeViewSet, UserViewSet, ProductViewSet, OrderViewSet, OrderItemViewSet, PaymentViewSet, DeliveryViewSet, UserProfileViewSet, RegisterView
+from store.api_views import MeUserSettingsViewSet
 from store import admin_reports
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -29,6 +30,7 @@ router.register(r'payments', PaymentViewSet)
 router.register(r'deliveries', DeliveryViewSet)
 
 router.register(r'profiles', UserProfileViewSet, basename='profiles')
+router.register(r'api/user/settings', MeUserSettingsViewSet, basename='me-settings')
 
 urlpatterns = [
     path('api/', include(router.urls)),

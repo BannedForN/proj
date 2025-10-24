@@ -1,14 +1,19 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Avg, Sum, Count, Q, Subquery, OuterRef, FloatField, Value
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect, FileResponse
 from django.utils.http import urlencode
 from django.contrib import messages
 from django.db import transaction
 from django.views.decorators.http import require_POST
+from django.urls import reverse
 from django.views.generic import ListView, DetailView
+from .forms import UserSettingsForm
+import os
+from django.conf import settings
 
 from rest_framework import viewsets, status, generics, permissions
 from rest_framework.response import Response
@@ -17,7 +22,7 @@ from rest_framework.decorators import action
 from .models import (
     UserRole, OrderStatus, PaymentStatus, DeliveryMethod, DeliveryStatus,
     Genre, PlayerRange, Product, Order, OrderItem, Payment, Delivery,
-    UserProfile, Cart, CartItem, Review, UserSettings
+    UserProfile, Cart, CartItem, Review, UserSettings, PaymentMethod
 )
 from .serializers import (
     UserRoleSerializer, OrderStatusSerializer, PaymentStatusSerializer,
@@ -27,7 +32,7 @@ from .serializers import (
     DeliverySerializer, UserProfileSerializer, RegisterSerializer
 )
 from .permissions import IsAdmin, IsManagerOrAdmin, IsClientOrReadOnly
-from .forms import RegisterForm, LoginForm, ReviewForm
+from .forms import RegisterForm, LoginForm, ReviewForm, OrderCreateForm, CheckoutForm
 import csv
 from django.contrib.admin.views.decorators import staff_member_required
 
@@ -257,6 +262,14 @@ class ProductListView(ListView):
         qs = qs.order_by(sort_map.get(sort, '-id'))
 
         return qs
+    
+    def get_paginate_by(self, queryset):
+        if self.request.user.is_authenticated and hasattr(self.request.user, 'settings'):
+            try:
+                return int(self.request.user.settings.page_size or self.paginate_by)
+            except Exception:
+                return self.paginate_by
+        return self.paginate_by
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -290,6 +303,11 @@ class ProductListView(ListView):
             ctx['current']['price_min'], ctx['current']['price_max'],
             ctx['current']['rating_min'], ctx['current']['players']
         ])
+
+        ctx['save_filters_url'] = reverse('store:save_catalog_filters')
+        ctx['apply_filters_url'] = reverse('store:apply_catalog_filters')
+
+        ctx['page_sizes'] = [8, 12, 16, 24, 32, 48]
 
         ctx['reset_url'] = self.request.path
         return ctx
@@ -390,28 +408,36 @@ def cart_remove(request, item_id):
 @login_required
 def order_create(request):
     cart = get_object_or_404(Cart, user=request.user)
-    if not cart.items.exists():
+    items = cart.items.select_related('product')
+
+    if not items.exists():
         messages.error(request, "Ваша корзина пуста.")
         return redirect('store:product_list')
 
+    total = sum(i.product.price * i.quantity for i in items)
+
     if request.method == 'POST':
-        address = request.POST.get('address')
-        if not address:
-            messages.error(request, "Введите адрес доставки.")
-            return redirect('store:cart_detail')
+        form = OrderCreateForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Проверьте форму.")
+            return render(request, 'store/order_create.html', {'cart': cart, 'form': form, 'total': total})
+
+        address = form.cleaned_data['address']
+        method: PaymentMethod = form.cleaned_data['payment_method']
 
         with transaction.atomic():
             status_new, _ = OrderStatus.objects.get_or_create(name="New")
             order = Order.objects.create(
                 user=request.user,
                 status=status_new,
-                total=cart.total_price()
+                total=total
             )
 
-            for item in cart.items.select_related('product'):
+            for item in items:
                 if item.product.stock < item.quantity:
                     messages.error(request, f"Недостаточно товара: {item.product.name}")
-                    raise transaction.TransactionManagementError()
+                    raise transaction.TransactionManagementError("Out of stock")
+
                 OrderItem.objects.create(
                     order=order,
                     product=item.product,
@@ -419,7 +445,7 @@ def order_create(request):
                     price=item.product.price
                 )
                 item.product.stock -= item.quantity
-                item.product.save()
+                item.product.save(update_fields=['stock'])
 
             delivery_status, _ = DeliveryStatus.objects.get_or_create(name="Pending")
             delivery_method, _ = DeliveryMethod.objects.get_or_create(name="Standard")
@@ -430,19 +456,30 @@ def order_create(request):
                 status=delivery_status
             )
 
-            payment_status, _ = PaymentStatus.objects.get_or_create(name="Pending")
-            Payment.objects.create(
+            p_status_pending, _ = PaymentStatus.objects.get_or_create(name="Pending")
+            payment = Payment.objects.create(
                 order=order,
                 amount=order.total,
-                status=payment_status
+                status=p_status_pending,
+                method=method
             )
 
-            cart.items.all().delete()
 
-        messages.success(request, f'Заказ #{order.id} успешно оформлен.')
-        return redirect('store:order_success', order.id)
+            if method.code == 'cod':
+                p_status, _ = PaymentStatus.objects.get_or_create(name="Authorized")
+                order_paid, _ = OrderStatus.objects.get_or_create(name="Awaiting Shipment")
+                payment.status = p_status
+                payment.save(update_fields=['status'])
+                order.status = order_paid
+                order.save(update_fields=['status'])
+                items.delete()
+                messages.success(request, f'Заказ #{order.id} оформлен. Оплата при получении.')
+                return redirect('store:order_success', order.id)
 
-    return render(request, 'store/order_create.html', {'cart': cart})
+        return redirect('store:payment_mock', payment_id=payment.id)
+
+    form = OrderCreateForm(initial={'address': ''})
+    return render(request, 'store/order_create.html', {'cart': cart, 'form': form, 'total': total})
 
 
 
@@ -577,3 +614,136 @@ def toggle_theme(request):
         settings.theme = 'dark' if settings.theme != 'dark' else 'light'
         settings.save(update_fields=['theme'])
     return JsonResponse({'status': 'ok', 'theme': settings.theme})
+
+
+@login_required
+def checkout(request):
+    cart = Cart.for_request(request)
+    items = CartItem.objects.filter(cart=cart).select_related('product')
+
+    total = sum(i.product.price * i.quantity for i in items)
+
+    if request.method == 'POST':
+        form = CheckoutForm(request.POST)
+        if form.is_valid():
+            method = form.cleaned_data['payment_method']
+            with transaction.atomic():
+                order = Order.objects.create(
+                    user=request.user,
+                    total=total,
+                )
+
+                payment = Payment.objects.create(
+                    order=order,
+                    method=method,
+                    amount=total,
+                    status=Payment.Status.PENDING,
+                )
+
+                if method.code == 'cod':
+                    order.status = 'AWAITING_SHIPMENT'
+                    order.save(update_fields=['status'])
+                    items.delete()
+                    return redirect('store:order_success', order_id=order.id)
+
+                return redirect('store:payment_mock', payment_id=payment.id)
+
+    else:
+        form = CheckoutForm()
+
+    return render(request, 'store/checkout.html', {
+        'items': items,
+        'total': total,
+        'form': form,
+    })
+
+@login_required
+def payment_mock(request, payment_id):
+    payment = get_object_or_404(Payment, pk=payment_id)
+    if payment.order.user_id != request.user.id and not request.user.is_staff:
+        return HttpResponseForbidden("Not your payment")
+    return render(request, 'store/payment_mock.html', {'payment': payment})
+
+@require_POST
+@login_required
+@transaction.atomic
+def payment_mock_callback(request, payment_id):
+    outcome = request.POST.get('outcome')
+    payment = get_object_or_404(Payment.objects.select_for_update(), pk=payment_id)
+
+    if payment.order.user_id != request.user.id and not request.user.is_staff:
+        return HttpResponseForbidden("Not your payment")
+
+    p_paid, _ = PaymentStatus.objects.get_or_create(name="Paid")
+    p_failed, _ = PaymentStatus.objects.get_or_create(name="Failed")
+    s_paid, _ = OrderStatus.objects.get_or_create(name="Paid")
+    s_failed, _ = OrderStatus.objects.get_or_create(name="Payment Failed")
+
+    if outcome == 'success':
+        payment.status = p_paid
+        payment.save(update_fields=['status'])
+        payment.order.status = s_paid
+        payment.order.save(update_fields=['status'])
+        CartItem.objects.filter(cart__user=payment.order.user).delete()
+        return redirect('store:order_success', payment.order_id)
+    else:
+        payment.status = p_failed
+        payment.save(update_fields=['status'])
+        payment.order.status = s_failed
+        payment.order.save(update_fields=['status'])
+        return render(request, 'store/payment_failed.html', {'order': payment.order, 'payment': payment})
+    
+
+@login_required
+@require_POST
+def update_page_size(request):
+    from .models import UserSettings
+    us, _ = UserSettings.objects.get_or_create(user=request.user)
+    try:
+        ps = max(1, min(100, int(request.POST.get('page_size', 12))))
+    except ValueError:
+        ps = 12
+    us.page_size = ps
+    us.save(update_fields=['page_size'])
+    return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/'))
+
+@login_required
+def save_catalog_filters(request):
+    from .models import UserSettings
+    us, _ = UserSettings.objects.get_or_create(user=request.user)
+    data = request.GET.copy()
+    data.pop('page', None)
+    us.saved_filters['catalog'] = data
+    us.save(update_fields=['saved_filters'])
+    messages.success(request, "Фильтры сохранены.")
+    return redirect('store:product_list')
+
+@login_required
+def apply_catalog_filters(request):
+    from .models import UserSettings
+    us, _ = UserSettings.objects.get_or_create(user=request.user)
+    params = us.saved_filters.get('catalog', {})
+    if not params:
+        messages.info(request, "Сохранённых фильтров нет.")
+        return redirect('store:product_list')
+    query = urlencode(params, doseq=True)
+    return redirect(f"{reverse('store:product_list')}?{query}")
+
+@login_required
+def user_settings_view(request):
+    us, _ = UserSettings.objects.get_or_create(user=request.user)
+    if request.method == 'POST':
+        form = UserSettingsForm(request.POST, instance=us)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Настройки сохранены.")
+            return redirect('store:user_settings')
+    else:
+        form = UserSettingsForm(instance=us)
+    return render(request, 'store/user_settings.html', {'form': form})
+
+
+@staff_member_required
+def download_backup(request, filename):
+    path = os.path.join(settings.BASE_DIR, "backups", filename)
+    return FileResponse(open(path, "rb"), as_attachment=True)

@@ -2,7 +2,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
-from .models import Order, CartItem, Review, UserProfile
+from .models import Order, CartItem, Review, UserProfile, PaymentMethod, UserSettings
 
 class RegisterForm(UserCreationForm):
     email = forms.EmailField(required=True)
@@ -32,13 +32,8 @@ class CartItemForm(forms.ModelForm):
 class DeliveryForm(forms.ModelForm):
     class Meta:
         model = Order
-        fields = []  # Заказ сам не имеет address
+        fields = []
     address = forms.CharField(max_length=255, required=True)
-
-class OrderCreateForm(forms.ModelForm):
-    class Meta:
-        model = Order
-        fields = []  # Order не хранит адрес
 
 class ReviewForm(forms.ModelForm):
     class Meta:
@@ -48,3 +43,26 @@ class ReviewForm(forms.ModelForm):
             'rating': forms.Select(choices=[(i, i) for i in range(1, 6)]),
             'comment': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Ваш комментарий'}),
         }
+
+class CheckoutForm(forms.Form):
+    payment_method = forms.ModelChoiceField(
+        queryset=PaymentMethod.objects.filter(is_active=True),
+        empty_label=None,
+        widget=forms.RadioSelect
+    )
+
+class OrderCreateForm(forms.Form):
+    address = forms.CharField(
+        max_length=255,
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    payment_method = forms.ModelChoiceField(
+        queryset=PaymentMethod.objects.filter(is_active=True),
+        empty_label=None,
+        widget=forms.RadioSelect
+    )
+
+class UserSettingsForm(forms.ModelForm):
+    class Meta:
+        model = UserSettings
+        fields = ['theme','date_format','number_format','page_size']

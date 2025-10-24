@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import (
     UserRole, OrderStatus, PaymentStatus, DeliveryMethod, DeliveryStatus,
-    Genre, PlayerRange, Product, Order, OrderItem, Payment, Delivery, UserProfile
+    Genre, PlayerRange, Product, Order, OrderItem, Payment, Delivery, UserProfile, UserSettings
 )
 
 User = get_user_model()
@@ -208,3 +208,8 @@ class DeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = Delivery
         fields = '__all__'
+
+class UserSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSettings
+        fields = ['theme','date_format','number_format','page_size','saved_filters']

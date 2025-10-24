@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, post_migrate
 from django.dispatch import receiver
 from django.contrib.auth.models import User
-from .models import UserProfile, UserRole
+from .models import UserProfile, UserRole, UserSettings
 
 
 @receiver(post_migrate)
@@ -37,3 +37,9 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
         profile.save(update_fields=['role'])
 
     print(f"✅ Профиль {instance.username}: {role_name}")
+
+
+@receiver(post_save, sender=User)
+def create_user_settings(sender, instance, created, **kwargs):
+    if created:
+        UserSettings.objects.get_or_create(user=instance)
