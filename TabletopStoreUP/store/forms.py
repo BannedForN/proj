@@ -1,4 +1,3 @@
-# store/forms.py
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
@@ -14,11 +13,10 @@ class RegisterForm(UserCreationForm):
         fields = ("username", "email", "password1", "password2")
 
     def save(self, commit=True):
-        user = super().save(commit)
-        full_name = self.cleaned_data.get('full_name')
-        phone = self.cleaned_data.get('phone')
+        user = super().save(commit=False)
+        user.email = self.cleaned_data.get('email')
         if commit:
-            UserProfile.objects.create(user=user, full_name=full_name, phone=phone)
+            user.save()
         return user
 
 class LoginForm(AuthenticationForm):

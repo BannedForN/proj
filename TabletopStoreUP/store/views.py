@@ -331,7 +331,12 @@ def register_view(request):
     if request.method == 'POST':
         form = RegisterForm(request.POST)
         if form.is_valid():
-            user = form.save()
+            with transaction.atomic():
+                user = form.save()
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                profile.full_name = form.cleaned_data.get('full_name') or user.username
+                profile.phone = form.cleaned_data.get('phone') or ''
+                profile.save(update_fields=['full_name', 'phone'])
             login(request, user)
             messages.success(request, "Регистрация успешна!")
             return redirect('store:product_list')
