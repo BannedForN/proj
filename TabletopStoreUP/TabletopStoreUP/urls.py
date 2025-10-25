@@ -3,7 +3,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from store.views import UserRoleViewSet, OrderStatusViewSet, PaymentStatusViewSet, DeliveryMethodViewSet, DeliveryStatusViewSet, GenreViewSet, PlayerRangeViewSet, UserViewSet, ProductViewSet, OrderViewSet, OrderItemViewSet, PaymentViewSet, DeliveryViewSet, UserProfileViewSet, RegisterView
+from store.api import (
+    UserRoleViewSet, OrderStatusViewSet, PaymentStatusViewSet,
+    DeliveryMethodViewSet, DeliveryStatusViewSet, GenreViewSet,
+    PlayerRangeViewSet, UserViewSet, ProductViewSet, OrderViewSet,
+    OrderItemViewSet, PaymentViewSet, DeliveryViewSet, UserProfileViewSet,
+    MeUserSettingsViewSet, ReviewViewSet, PaymentMethodViewSet, RegisterView,
+)
 from store.api_views import MeUserSettingsViewSet
 from store import admin_reports
 from rest_framework_simplejwt.views import (
@@ -14,6 +20,7 @@ from rest_framework_simplejwt.views import (
 
 router = DefaultRouter()
 
+router = DefaultRouter()
 router.register(r'user-roles', UserRoleViewSet)
 router.register(r'order-statuses', OrderStatusViewSet)
 router.register(r'payment-statuses', PaymentStatusViewSet)
@@ -21,16 +28,16 @@ router.register(r'delivery-methods', DeliveryMethodViewSet)
 router.register(r'delivery-statuses', DeliveryStatusViewSet)
 router.register(r'genres', GenreViewSet)
 router.register(r'player-ranges', PlayerRangeViewSet)
-
-router.register(r'users', UserViewSet)
+router.register(r'users', UserViewSet, basename='users')
 router.register(r'products', ProductViewSet)
 router.register(r'orders', OrderViewSet)
 router.register(r'order-items', OrderItemViewSet)
 router.register(r'payments', PaymentViewSet)
 router.register(r'deliveries', DeliveryViewSet)
-
 router.register(r'profiles', UserProfileViewSet, basename='profiles')
 router.register(r'api/user/settings', MeUserSettingsViewSet, basename='me-settings')
+router.register(r'reviews', ReviewViewSet)
+router.register(r'payment-methods', PaymentMethodViewSet)
 
 urlpatterns = [
     path('api/', include(router.urls)),

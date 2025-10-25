@@ -178,3 +178,4 @@ if EMAIL_PORT == 587:
 if EMAIL_USE_SSL:
     EMAIL_USE_TLS = False
 
+SEED_DEMO = os.getenv("SEED_DEMO", "1")

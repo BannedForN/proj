@@ -87,18 +87,15 @@
 
 <div class="mt-2">⭐ {{ p.avg_rating|default:"—" }}</div>
 
-        <div class="d-flex gap-2 mt-3">
-          {% if user.is_authenticated %}
-          {% if p.stock > 0 %}
-            <form method="post" action="{% url 'store:cart_add' p.id %}">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-success">В корзину</button>
-            </form>
+        <div class="d-flex gap-2 actions mt-3">
+          {% if p.stock|default:0 > 0 %}
+            <a class="btn btn-sm btn-success add-to-cart" href="{% url 'store:cart_add_gate' p.id %}?qty=1">
+              В корзину
+            </a>
           {% else %}
             <button class="btn btn-sm btn-secondary" disabled>Нет в наличии</button>
           {% endif %}
-          {% endif %}
-          <a href="{% url 'store:product_detail' p.pk %}" class="btn btn-sm btn-outline-primary">Подробнее</a>
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'store:product_detail' p.pk %}">Подробнее</a>
         </div>
       </div>
     </div>
