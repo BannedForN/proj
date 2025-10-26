@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import ListView, DetailView
 from django.contrib import messages
 from django.conf import settings
-
+from django.http import QueryDict
 from .forms import (
     RegisterForm, LoginForm, ReviewForm,
     OrderCreateForm, CheckoutForm, UserSettingsForm
@@ -107,12 +107,12 @@ class ProductListView(ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        params = self.request.GET.copy()
+        params: QueryDict = self.request.GET.copy()
 
-        def _page_url(page):
-            params2 = params.copy()
-            params2['page'] = page
-            return f"{self.request.path}?{urlencode(params2)}"
+        def _page_url(page: int) -> str:
+            p = params.copy()
+            p['page'] = str(page)
+            return f"{self.request.path}?{p.urlencode()}"
 
         page_obj = ctx.get('page_obj')
         ctx['next_page_url'] = _page_url(page_obj.next_page_number()) if page_obj and page_obj.has_next() else ''

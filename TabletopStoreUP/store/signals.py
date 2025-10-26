@@ -2,7 +2,7 @@ from django.db.models.signals import post_save, post_migrate
 from django.dispatch import receiver
 from django.conf import settings
 from django.contrib.auth.models import User
-from .models import UserProfile, UserRole, UserSettings
+from .models import UserProfile, UserRole, UserSettings, OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, DeliveryStatus, Genre, PlayerRange, Product
 from decimal import Decimal
 
 
