@@ -12,11 +12,6 @@ def _yes(val: str) -> bool:
 
 @receiver(post_migrate)
 def seed_reference_and_demo(sender, **kwargs):
-    """
-    После применения миграций:
-    - создаём справочники (роли/статусы/методы), если их нет
-    - при DEBUG и SEED_DEMO=1 создаём демо-пользователей/товары/и пр.
-    """
     if getattr(sender, "label", None) != "store":
         return
 
@@ -139,10 +134,6 @@ def _ensure_profile_with_role(user: User, role_name: str):
 
 @receiver(post_save, sender=User)
 def ensure_profile_settings_on_user_change(sender, instance: User, created, **kwargs):
-    """
-    1) Профиль + роль по умолчанию (client / admin)
-    2) Настройки пользователя
-    """
     role_name = "admin" if instance.is_superuser else "client"
     _ensure_profile_with_role(instance, role_name)
 

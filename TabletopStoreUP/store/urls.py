@@ -6,24 +6,19 @@ from . import admin_reports
 app_name = 'store'
 
 urlpatterns = [
-    # Список продуктов (класс ProductListView)
     path('', views.ProductListView.as_view(), name='product_list'),
 
-    # Детали продукта (DetailView)
     path('product/<int:pk>/', views.ProductDetailView.as_view(), name='product_detail'),
     path('product/<int:product_id>/review/', views.add_review, name='add_review'),
 
-    # Корзина
     path('cart/', views.cart_detail, name='cart_detail'),
     path('cart/add/<int:product_id>/', views.cart_add, name='cart_add'),
     path('cart/remove/<int:item_id>/', views.cart_remove, name='cart_remove'),
     path('cart/add-gate/<int:product_id>/', views.cart_add_gate, name='cart_add_gate'),
 
-    # Заказы
     path('order/create/', views.order_create, name='create_order'),
     path('order/success/<int:order_id>/', views.order_success_view, name='order_success'),
 
-    # Пользователи
     path('register/', views.register_view, name='register'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),

@@ -11,12 +11,11 @@ class MeUserSettingsViewSet(viewsets.ViewSet):
         us, _ = UserSettings.objects.get_or_create(user=request.user)
         return us
 
-    # GET /api/user/settings/
     def list(self, request):
         us = self._get(request)
         return Response(UserSettingsSerializer(us).data)
 
-    # PATCH /api/user/settings/
+
     def partial_update(self, request, pk=None):
         us = self._get(request)
         ser = UserSettingsSerializer(us, data=request.data, partial=True)
@@ -24,7 +23,6 @@ class MeUserSettingsViewSet(viewsets.ViewSet):
         ser.save()
         return Response(ser.data)
 
-    # POST /api/user/settings/filters/<key>/
     @action(detail=False, methods=['post'], url_path=r'filters/(?P<key>[^/]+)')
     def save_filters(self, request, key=None):
         us = self._get(request)
@@ -33,7 +31,6 @@ class MeUserSettingsViewSet(viewsets.ViewSet):
         us.save(update_fields=['saved_filters'])
         return Response({'status':'ok','key':key})
 
-    # GET /api/user/settings/filters/<key>/
     @action(detail=False, methods=['get'], url_path=r'filters/(?P<key>[^/]+)')
     def get_filters(self, request, key=None):
         us = self._get(request)

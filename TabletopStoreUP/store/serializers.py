@@ -12,15 +12,12 @@ from .models import (
 
 User = get_user_model()
 
-# ===================== СЛУЖЕБНЫЕ =====================
 
 class SimpleUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "username", "email"]
 
-
-# ===================== РОЛИ/ПРОФИЛЬ =====================
 
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -85,7 +82,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-# ===================== СПРАВОЧНИКИ КАТАЛОГА =====================
 
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
@@ -105,8 +101,6 @@ class PlayerRangeSerializer(serializers.ModelSerializer):
             )
         return data
 
-
-# ===================== ПРОДУКТЫ/ОТЗЫВЫ =====================
 
 class ProductSerializer(serializers.ModelSerializer):
     genre = GenreSerializer(read_only=True)
@@ -187,8 +181,6 @@ class ReviewSerializer(serializers.ModelSerializer):
         return v
 
 
-# ===================== ЗАКАЗЫ/ЭЛЕМЕНТЫ =====================
-
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     line_total = serializers.SerializerMethodField(read_only=True)
@@ -253,8 +245,6 @@ class OrderSerializer(serializers.ModelSerializer):
         return order
 
 
-# ===================== ОПЛАТЫ/ДОСТАВКИ =====================
-
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
@@ -274,8 +264,6 @@ class DeliverySerializer(serializers.ModelSerializer):
         model = Delivery
         fields = "__all__"
 
-
-# ===================== НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ =====================
 
 class UserSettingsSerializer(serializers.ModelSerializer):
     class Meta:

@@ -18,7 +18,7 @@ from django.conf import settings
 from django.http import QueryDict
 from .forms import (
     RegisterForm, LoginForm, ReviewForm,
-    OrderCreateForm, CheckoutForm, UserSettingsForm
+    OrderCreateForm, UserSettingsForm
 )
 from .models import (
     UserRole, OrderStatus, PaymentStatus, DeliveryMethod, DeliveryStatus,
@@ -30,7 +30,6 @@ import os
 
 User = get_user_model()
 
-# ========================= Каталог =========================
 
 class ProductListView(ListView):
     model = Product
@@ -60,12 +59,10 @@ class ProductListView(ListView):
 
         p = self.request.GET
 
-        # Поиск
         q = (p.get('q') or '').strip()
         if q:
             qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
 
-        # Фильтры
         if p.get('genre'):
             qs = qs.filter(genre_id=p['genre'])
 
@@ -85,7 +82,6 @@ class ProductListView(ListView):
         if players:
             qs = qs.filter(player_ranges__in=players).distinct()
 
-        # Сортировка
         sort = p.get('sort') or 'new'
         sort_map = {
             'price_asc': 'price',
@@ -158,7 +154,6 @@ class ProductDetailView(DetailView):
         context['avg_rating'] = avg_rating
         return context
 
-# ========================= Аутентификация =========================
 
 def register_view(request):
     if request.method == 'POST':
@@ -169,7 +164,6 @@ def register_view(request):
                 profile, _ = UserProfile.objects.get_or_create(user=user)
                 profile.full_name = form.cleaned_data.get('full_name') or user.username
                 profile.phone = form.cleaned_data.get('phone') or ''
-                # роль по умолчанию
                 if not profile.role_id:
                     role, _ = UserRole.objects.get_or_create(name='client')
                     profile.role = role
@@ -200,7 +194,6 @@ def logout_view(request):
     logout(request)
     return redirect('store:product_list')
 
-# ========================= Корзина =========================
 
 @login_required
 def cart_detail(request):
@@ -268,7 +261,6 @@ def cart_add_gate(request, product_id):
 
     return redirect('store:cart_detail')
 
-# ========================= Заказы / Оплата =========================
 
 @login_required
 def order_create(request):
@@ -310,7 +302,6 @@ def order_create(request):
             p_status, _ = PaymentStatus.objects.get_or_create(name="Pending")
             payment = Payment.objects.create(order=order, amount=order.total, status=p_status, method=method)
 
-            # Оплата при получении — сразу авторизуем/готовим к отгрузке
             if method.code == 'cod':
                 ps, _ = PaymentStatus.objects.get_or_create(name="Authorized")
                 os, _ = OrderStatus.objects.get_or_create(name="Awaiting Shipment")
@@ -356,7 +347,6 @@ def order_detail(request, order_id):
                'payment': getattr(order, 'payment', None)}
     return render(request, 'store/order_detail.html', context)
 
-# ========================= Отзывы =========================
 
 @login_required
 def add_review(request, product_id):
@@ -378,7 +368,7 @@ def add_review(request, product_id):
         form = ReviewForm()
     return render(request, 'store/add_review.html', {'product': product, 'form': form})
 
-# ========================= Аналитика и резервные копии =========================
+
 
 @staff_member_required
 def analytics_dashboard(request):
@@ -392,13 +382,13 @@ def analytics_dashboard(request):
         orders = orders.filter(order_date__date__lte=end_date)
 
     total_orders = orders.count()
-    total_revenue = orders.aggregate_sum = orders.aggregate(total_sum=Count('id'))  # not used, left for clarity
+    total_revenue = orders.aggregate_sum = orders.aggregate(total_sum=Count('id'))
     total_revenue = orders.aggregate_sum if isinstance(total_revenue, (int, float)) else (orders.aggregate_sum or 0)
 
-    total_revenue = orders.aggregate_sum  # guard
+    total_revenue = orders.aggregate_sum
     total_revenue = orders.aggregate_sum or 0
 
-    total_revenue = orders.aggregate_sum if orders else 0  # but we’ll recompute properly:
+    total_revenue = orders.aggregate_sum if orders else 0
 
     from django.db.models import Sum
     total_revenue = orders.aggregate(Sum('total'))['total__sum'] or 0
@@ -435,7 +425,6 @@ def download_backup(request, filename):
     path = os.path.join(settings.BASE_DIR, "backups", filename)
     return FileResponse(open(path, "rb"), as_attachment=True)
 
-# ========================= Настройки/тема, пагинация и фильтры =========================
 
 @login_required
 @require_POST
@@ -478,7 +467,6 @@ def apply_catalog_filters(request):
     query = urlencode(params, doseq=True)
     return redirect(f"{reverse('store:product_list')}?{query}")
 
-# ========================= Мок оплаты =========================
 
 @login_required
 def payment_mock(request, payment_id):

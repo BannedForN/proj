@@ -9,7 +9,6 @@ import datetime
 
 @staff_member_required
 def analytics_dashboard(request):
-    # --- Период анализа ---
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
@@ -24,20 +23,17 @@ def analytics_dashboard(request):
 
     orders = Order.objects.filter(order_date__date__range=(start_date, end_date))
 
-    # --- Ключевые показатели ---
     total_orders = orders.count()
     total_revenue = orders.aggregate(total=Sum('total'))['total'] or 0
     avg_check = orders.aggregate(avg=Avg('total'))['avg'] or 0
     unique_customers = orders.values('user').distinct().count()
 
-    # --- Выручка по дням (для линейного графика) ---
     daily_revenue = (
         orders.values('order_date__date')
         .annotate(total=Sum('total'))
         .order_by('order_date__date')
     )
 
-    # --- Популярные товары (для круговой диаграммы) ---
     popular_products = (
         OrderItem.objects
         .filter(order__in=orders)
@@ -46,7 +42,6 @@ def analytics_dashboard(request):
         .order_by('-total_sold')[:10]
     )
 
-    # --- Активность пользователей (для столбчатой диаграммы) ---
     user_activity = (
         orders
         .values('order_date__date')
@@ -74,8 +69,7 @@ def export_analytics_csv(request):
     """Экспорт данных аналитики в CSV"""
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="analytics_report.csv"'
-    response.write('\ufeff'.encode('utf8'))  # BOM для Excel
-
+    response.write('\ufeff'.encode('utf8'))
     start_date = parse_date(request.GET.get('start_date'))
     end_date = parse_date(request.GET.get('end_date'))
 

@@ -1,9 +1,11 @@
 from django.contrib import admin, messages
+from django.db.models import Count, F
 from django.db import transaction
 from django.http import HttpResponse
 from django.urls import re_path
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from decimal import Decimal
 
 from . import admin_reports
 from .models import (
@@ -33,7 +35,6 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     list_editable = ("is_active",)
     search_fields = ("code", "name")
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФИЛЬТРЫ ==========
 class StockLevelFilter(admin.SimpleListFilter):
     title = "Остаток"
     parameter_name = "stock_level"
@@ -55,7 +56,6 @@ class StockLevelFilter(admin.SimpleListFilter):
             return queryset.filter(stock__gte=5)
         return queryset
 
-# ========== PRODUCT ==========
 class ReviewInline(admin.TabularInline):
     model = Review
     extra = 0
@@ -94,13 +94,13 @@ class ProductAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.annotate(_reviews_count=admin.models.Count("review"))
+        return qs.annotate(_reviews_count = Count("reviews", distinct=True))
 
     def reviews_count(self, obj):
-        return obj.review_set.count()
+        return getattr(obj, "_reviews_count", 0)
     reviews_count.short_description = "Отзывов"
+    reviews_count.admin_order_field = "_reviews_count"
 
-# Прочие простые модели
 @admin.register(Genre)
 class GenreAdmin(admin.ModelAdmin):
     list_display = ("id", "name")
@@ -127,7 +127,6 @@ class ReviewAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at",)
     autocomplete_fields = ("product", "user")
 
-# ========== ORDER / PAYMENT / DELIVERY ==========
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
@@ -136,7 +135,9 @@ class OrderItemInline(admin.TabularInline):
     autocomplete_fields = ("product",)
 
     def line_total(self, obj):
-        return f"{obj.price * obj.quantity:.2f} ₽"
+        price = obj.price if obj.price is not None else Decimal("0")
+        qty = obj.quantity if obj.quantity is not None else 0
+        return f"{(price * qty):.2f} ₽"
     line_total.short_description = "Сумма"
 
 class PaymentInline(admin.StackedInline):
@@ -187,7 +188,7 @@ def cancel_orders(modeladmin, request, queryset):
     with transaction.atomic():
         for order in queryset.prefetch_related("items__product"):
             for it in order.items.all():
-                it.product.stock = admin.models.F("stock") + it.quantity
+                it.product.stock = F("stock") + it.quantity
                 it.product.save(update_fields=["stock"])
             Payment.objects.filter(order=order).update(status=p_failed)
             order.status = cancelled
@@ -221,11 +222,12 @@ class OrderAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.annotate(_items=admin.models.Count("items"))
+        return qs.annotate(_items=Count("items"))
 
     def items_count(self, obj):
         return getattr(obj, "_items", 0)
     items_count.short_description = "Позиций"
+    items_count.admin_order_field = "_items"
 
     def total_fmt(self, obj):
         return f"{obj.total:.2f} ₽"
@@ -239,7 +241,11 @@ class OrderItemAdmin(admin.ModelAdmin):
     autocomplete_fields = ("order", "product")
 
     def line_total(self, obj):
-        return f"{obj.price * obj.quantity:.2f} ₽"
+        from decimal import Decimal
+        price = obj.price if obj.price is not None else Decimal("0")
+        qty = obj.quantity if obj.quantity is not None else 0
+        return f"{(price * qty):.2f} ₽"
+    line_total.short_description = "Сумма"
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
@@ -276,7 +282,6 @@ class DeliveryStatusAdmin(admin.ModelAdmin):
     list_display = ("name",)
     search_fields = ("name",)
 
-# ========== КАСТОМНЫЕ URL АДМИНКИ (АНАЛИТИКА) ==========
 def get_custom_admin_urls(original_get_urls):
     def custom_urls():
         urls = original_get_urls()
