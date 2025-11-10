@@ -7,7 +7,7 @@ from django.db.models import Avg, Count, Q, Subquery, OuterRef, FloatField, Valu
 from django.db.models.functions import Coalesce
 from django.http import (
     JsonResponse, HttpResponseForbidden, HttpResponseRedirect,
-    FileResponse, HttpResponseBadRequest
+    FileResponse, HttpResponseBadRequest, HttpResponse
 )
 from django.urls import reverse
 from django.utils.http import urlencode
@@ -25,6 +25,7 @@ from .models import (
     Genre, PlayerRange, Product, Order, OrderItem, Payment, Delivery,
     UserProfile, Cart, CartItem, Review, UserSettings, PaymentMethod
 )
+import csv, io, json, re
 
 import os
 
@@ -517,3 +518,172 @@ def user_settings_view(request):
     else:
         form = UserSettingsForm(instance=us)
     return render(request, 'store/user_settings.html', {'form': form})
+
+@staff_member_required
+def export_catalog_csv(request):
+    """Экспорт каталога (Product + Genre + PlayerRange) в CSV."""
+    from .models import Product  # локальный импорт, чтобы избежать циклов
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    headers = ["id", "name", "description", "price", "stock", "genre", "player_ranges"]
+    writer.writerow(headers)
+
+    qs = Product.objects.select_related("genre").prefetch_related("player_ranges").order_by("id")
+    for p in qs:
+        pr = ";".join(f"{r.min_players}-{r.max_players}" for r in p.player_ranges.all())
+        writer.writerow([
+            p.id,
+            p.name,
+            p.description,
+            str(p.price),
+            p.stock,
+            p.genre.name if p.genre_id else "",
+            pr,
+        ])
+
+    resp = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="catalog.csv"'
+    return resp
+
+
+@staff_member_required
+def export_catalog_json(request):
+    """Экспорт каталога в JSON."""
+    from .models import Product
+    data = []
+    qs = Product.objects.select_related("genre").prefetch_related("player_ranges").order_by("id")
+    for p in qs:
+        data.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "price": float(p.price),
+            "stock": p.stock,
+            "genre": p.genre.name if p.genre_id else None,
+            "player_ranges": [f"{r.min_players}-{r.max_players}" for r in p.player_ranges.all()],
+        })
+    js = json.dumps(data, ensure_ascii=False, indent=2)
+    resp = HttpResponse(js, content_type="application/json; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="catalog.json"'
+    return resp
+
+
+@staff_member_required
+def import_catalog_view(request):
+    """
+    Импорт каталога из CSV/JSON.
+    CSV-колонки: id(опц.), name, description, price, stock, genre, player_ranges (например: "2-4;3-6").
+    JSON — список объектов с теми же полями. 
+    Поиск существующих: сперва по id, затем по name (без регистра).
+    Жанры и диапазоны игроков создаются при необходимости.
+    """
+
+    if request.method == "POST" and request.FILES.get("file"):
+        f = request.FILES["file"]
+        ext = (f.name.rsplit(".", 1)[-1] if "." in f.name else "").lower()
+        created = updated = 0
+        errors = []
+
+        def get_or_create_range(s: str):
+            s = (s or "").strip()
+            if not s:
+                return None
+            m = re.match(r"^(\d+)\s*[-–]\s*(\d+)$", s)
+            if not m:
+                return None
+            a, b = int(m.group(1)), int(m.group(2))
+            obj, _ = PlayerRange.objects.get_or_create(min_players=a, max_players=b)
+            return obj
+
+        try:
+            # читаем данные
+            if ext in ("csv", "tsv"):
+                decoded = f.read().decode("utf-8-sig")
+                rows = list(csv.DictReader(io.StringIO(decoded)))
+            else:
+                rows = json.load(f)
+
+            for idx, row in enumerate(rows, start=1):
+                try:
+                    # Унификация полей
+                    if isinstance(row, dict):
+                        name = (row.get("name") or "").strip()
+                        desc = row.get("description") or ""
+                        price = row.get("price") or 0
+                        stock = int(row.get("stock") or 0)
+                        genre_name = (row.get("genre") or "").strip()
+                        pr_raw = row.get("player_ranges") or ""
+                        if isinstance(pr_raw, str):
+                            pr_list = [s for s in pr_raw.split(";") if s.strip()]
+                        else:
+                            pr_list = list(pr_raw)
+                        pid = row.get("id")
+                    else:
+                        # CSV-строка
+                        name = (row.get("name") or "").strip()
+                        desc = row.get("description") or ""
+                        price = row.get("price") or "0"
+                        stock = int(row.get("stock") or 0)
+                        genre_name = (row.get("genre") or "").strip()
+                        pr_list = [s for s in (row.get("player_ranges") or "").split(";") if s.strip()]
+                        pid = row.get("id")
+
+                    if not name:
+                        errors.append(f"Строка {idx}: отсутствует name")
+                        continue
+
+                    genre = None
+                    if genre_name:
+                        genre, _ = Genre.objects.get_or_create(name=genre_name)
+
+                    # Поиск существующего товара
+                    obj = None
+                    if pid:
+                        try:
+                            obj = Product.objects.get(id=int(pid))
+                        except Product.DoesNotExist:
+                            obj = None
+                    if obj is None:
+                        obj = Product.objects.filter(name__iexact=name).first()
+
+                    # Создание/обновление
+                    if obj is None:
+                        obj = Product.objects.create(
+                            name=name,
+                            description=desc,
+                            price=price,
+                            stock=stock,
+                            genre=genre,
+                        )
+                        created += 1
+                    else:
+                        obj.name = name
+                        obj.description = desc
+                        obj.price = price
+                        obj.stock = stock
+                        obj.genre = genre
+                        obj.save()
+                        updated += 1
+
+                    # Диапазоны игроков
+                    ranges = [get_or_create_range(s) for s in pr_list]
+                    ranges = [r for r in ranges if r is not None]
+                    if ranges:
+                        obj.player_ranges.set(ranges)
+                    else:
+                        obj.player_ranges.clear()
+
+                except Exception as e:
+                    errors.append(f"Строка {idx}: {e}")
+
+            return render(request, "store/catalog_import_result.html", {
+                "created": created, "updated": updated, "errors": errors
+            })
+
+        except Exception as e:
+            return render(request, "store/catalog_import_result.html", {
+                "created": 0, "updated": 0, "errors": [str(e)]
+            })
+
+    # GET — форма загрузки
+    return render(request, "store/catalog_import.html", {})

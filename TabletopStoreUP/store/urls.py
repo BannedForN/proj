@@ -61,6 +61,10 @@ path('password_reset/',
     path('catalog/filters/save/', views.save_catalog_filters, name='save_catalog_filters'),
     path('catalog/filters/apply/', views.apply_catalog_filters, name='apply_catalog_filters'),
     path('settings/', views.user_settings_view, name='user_settings'),
+
+    path('catalog/export.csv', views.export_catalog_csv, name='catalog_export_csv'),
+    path('catalog/export.json', views.export_catalog_json, name='catalog_export_json'),
+    path('catalog/import/', views.import_catalog_view, name='catalog_import'),
     
     path('admin/backups/<str:filename>/', views.download_backup, name='download_backup'),
 ]

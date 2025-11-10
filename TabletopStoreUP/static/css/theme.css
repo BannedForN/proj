@@ -345,3 +345,140 @@ footer.site-footer {
 .text-soft  { color: var(--text-soft) !important; }
 .text-mute  { color: var(--text-mute) !important; }
 .border-soft{ border-color: var(--border-soft) !important; }
+
+
+/* ====== Layout ====== */
+.container {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+/* Простая сетка каталога */
+.catalog-grid {
+  display: grid;
+  grid-template-columns: 1fr;          /* Мобайл (xs) */
+  gap: 1rem;
+}
+
+/* Карточка товара */
+.card {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: .75rem;
+  background: var(--card-bg, #fff);
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+  display: flex;
+  flex-direction: column;
+}
+.card img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block; /* убираем «щели» под картинкой */
+}
+.card .title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: .5rem 0 .25rem;
+}
+.card .price {
+  font-weight: 700;
+  margin-top: .25rem;
+}
+.card .actions {
+  margin-top: auto;
+  display: flex;
+  gap: .5rem;
+}
+
+/* Обёртка для таблиц на узких экранах */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th, .table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: .5rem .75rem;
+  text-align: left;
+}
+
+/* Навигация (бургер) */
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .75rem 0;
+}
+.navbar .brand {
+  font-weight: 800;
+}
+.navbar .spacer {
+  flex: 1;
+}
+.navbar .menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+.navbar .links {
+  display: none;          /* xs: скрыто */
+  gap: 1rem;
+}
+.navbar .links a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ====== Breakpoints ======
+   xs: < 600px  (по умолчанию)
+   sm: ≥ 600px
+   md: ≥ 900px
+   lg: ≥ 1200px
+   Можно подогнать под ваши нужды
+*/
+
+/* ≥ 600px (sm) — 2 колонки в каталоге, показываем меню горизонтально */
+@media (min-width: 600px) {
+  .catalog-grid { grid-template-columns: repeat(2, 1fr); }
+  .navbar .links { display: flex; }
+  .navbar .menu-btn { display: none; }
+}
+
+/* ≥ 900px (md) — 3 колонки */
+@media (min-width: 900px) {
+  .catalog-grid { grid-template-columns: repeat(3, 1fr); }
+  .card .title { font-size: 1.05rem; }
+}
+
+/* ≥ 1200px (lg) — 4 колонки */
+@media (min-width: 1200px) {
+  .catalog-grid { grid-template-columns: repeat(4, 1fr); }
+  .container { max-width: 1280px; }
+}
+
+/* ===== Дополнительно: адаптивные отступы и кнопки ===== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: .5rem .9rem; border: 1px solid #0ea5e9; color: #0ea5e9;
+  border-radius: 10px; background: #fff; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.btn:hover { background: #0ea5e9; color: #fff; }
+.btn-primary { background: #0ea5e9; color: #fff; border-color: #0ea5e9; }
+.btn-primary:hover { filter: brightness(.95); }
+
+/* Утилиты */
+.mt-1{ margin-top:.25rem } .mt-2{ margin-top:.5rem } .mt-3{ margin-top:.75rem }
+.gap-1{ gap:.25rem } .gap-2{ gap:.5rem } .gap-3{ gap:.75rem }
+.hidden{ display:none }
